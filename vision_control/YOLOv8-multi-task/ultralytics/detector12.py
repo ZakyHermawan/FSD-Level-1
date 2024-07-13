@@ -207,7 +207,20 @@ while True:
                     color_mask[:, :, 1] = mask * 255  # Green for the first mask
                 elif i == 2:
                     color_mask[:, :, 2] = mask * 255  # Red for the second mask
-                
+
+                # Calculate the center of the mask
+                mask_indices = np.where(mask > 0)
+                if len(mask_indices[0]) > 0 and len(mask_indices[1]) > 0:
+                    cx = int(np.mean(mask_indices[1]))
+                    cy = int(np.mean(mask_indices[0]))
+
+                    # Get the depth value at the center of the mask
+                    depth_value = depth.get_value(cx, cy)[1]
+                    
+                    if np.isfinite(depth_value):
+                        depth_label = f'Depth: {depth_value:.2f}m'
+                        cv2.putText(combined_img, depth_label, (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+
                 alpha = 0.5
                 combined_img[np.any(color_mask != 0, axis=-1)] = (1 - alpha) * combined_img[np.any(color_mask != 0, axis=-1)] + alpha * color_mask[np.any(color_mask != 0, axis=-1)]
 

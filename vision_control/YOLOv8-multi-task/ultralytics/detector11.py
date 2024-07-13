@@ -63,7 +63,7 @@ def brake_control(distance):
     return brake
 
 def velocity_control(distance):
-    velocity = 0  # initialize brake variable
+    velocity = 0  # initialize velocity variable
     if distance > 7:
         velocity = 25
     elif 5 < distance < 7:
@@ -99,9 +99,23 @@ class KalmanFilter:
 # Dictionary to store Kalman filters for each tracked object
 kalman_filters = {}
 
+# Function to find the farthest drivable point
+def find_farthest_drivable_point(mask):
+    # Assuming the drivable area is white (255) in the mask
+    drivable_points = np.where(mask == 255)
+    if len(drivable_points[0]) == 0:
+        return None
+    # The farthest point will be the one with the smallest y-coordinate (closest to the top of the image)
+    farthest_index = np.argmin(drivable_points[0])
+    return (drivable_points[1][farthest_index], drivable_points[0][farthest_index])
+
+frame_count = 0  # Add a frame counter for debugging
+
 while True:
     # Grab an image
     if zed.grab() == sl.ERROR_CODE.SUCCESS:
+        frame_count += 1  # Increment frame counter
+        
         # Retrieve the left image and depth map
         zed.retrieve_image(image, sl.VIEW.LEFT)
         zed.retrieve_measure(depth, sl.MEASURE.DEPTH)
@@ -198,18 +212,41 @@ while True:
                     cv2.putText(combined_img, track_label, (x1, y1 - 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                     cv2.rectangle(combined_img, (x1, y1), (x2, y2), (255, 0, 0), 2)
 
-            # Overlay segmentation masks
+            # Overlay segmentation masks and process drivable area
+            drivable_mask = None
             for i in range(1, len(plotted_img)):
                 mask = plotted_img[i][0].to(torch.uint8).cpu().numpy()
                 color_mask = np.zeros_like(combined_img)
                 
-                if i == 1:
-                    color_mask[:, :, 1] = mask * 255  # Green for the first mask
+                if i == 1:  # Assuming the first mask is the drivable area
+                    color_mask[:, :, 1] = mask * 255  # Green for the drivable area
+                    drivable_mask = mask
                 elif i == 2:
                     color_mask[:, :, 2] = mask * 255  # Red for the second mask
                 
                 alpha = 0.5
                 combined_img[np.any(color_mask != 0, axis=-1)] = (1 - alpha) * combined_img[np.any(color_mask != 0, axis=-1)] + alpha * color_mask[np.any(color_mask != 0, axis=-1)]
+
+            # Process drivable area and find farthest point
+            if drivable_mask is not None:
+                farthest_point = find_farthest_drivable_point(drivable_mask)
+                if farthest_point is not None:
+                    fx, fy = farthest_point
+                    # Get the depth value at the farthest point
+                    farthest_depth = depth.get_value(fx, fy)[1]
+                    if np.isfinite(farthest_depth):
+                        # Display the distance to the farthest drivable point
+                        farthest_label = f'Farthest Drivable: {farthest_depth:.2f}m'
+                        cv2.putText(combined_img, farthest_label, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+                        # Draw a circle at the farthest point
+                        cv2.circle(combined_img, (fx, fy), 10, (0, 255, 255), -1)
+                        print(f"Frame {frame_count}: Farthest point drawn at ({fx}, {fy}) with depth {farthest_depth:.2f}m")
+                    else:
+                        print(f"Frame {frame_count}: Invalid depth at farthest point ({fx}, {fy})")
+                else:
+                    print(f"Frame {frame_count}: No drivable area found in the mask")
+            else:
+                print(f"Frame {frame_count}: No drivable mask detected")
 
             # Display the combined image
             cv2.imshow("ZED + YOLOv8 - Combined Detection and Segmentation", cv2.cvtColor(combined_img, cv2.COLOR_RGB2BGR))
