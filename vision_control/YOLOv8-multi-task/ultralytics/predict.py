@@ -1,25 +1,25 @@
 import sys
-sys.path.insert(0, "/home/irman/Documents/zed-sdk/object detection/custom detector/python/pytorch_yolov8/YOLOv8-multi-task/ultralytics")
+sys.path.insert(0, "/home/irman/Documents/FSD-Level-1/vision_control/YOLOv8-multi-task/ultralytics")
 
 from ultralytics import YOLO
 import cv2
 
-img = cv2.imread('/home/irman/Documents/zed-sdk/object detection/custom detector/python/pytorch_yolov8/videos/jalan_tol_new.png')
+img = cv2.imread('/home/irman/Documents/FSD-Level-1/vision_control/videos/jalan_tol_new.png')
 
 
 number = 3 #input how many tasks in your work
-model = YOLO('/home/irman/Documents/Level2-FSD/zed-sdk/object detection/custom detector/python/pytorch_yolov8/YOLOv8-multi-task/ultralytics/v4s.pt', task='multi')  # Validate the model
+model = YOLO('/home/irman/Documents/FSD-Level-1/vision_control/YOLOv8-multi-task/ultralytics/v4s.onnx', task='multi')  # Validate the model
 results = model.predict(source=img, imgsz=(384,672), device=[0],name='v4_daytime', save=True, conf=0.25, iou=0.45, show_labels=False, stream=True, save_txt=True)
-print('Pred results: ', results)
-
-for result in results:
-    if isinstance(result, list):
-        result_ = result[0]
-        boxes = result_.boxes
-        masks = result_.masks
-        probs = result_.probs
-        print("Masks: ", masks)
-        print("Bbox: ", boxes)
+# print('Pred results: ', results)
+# model.export(format="onnx")
+# for result in results:
+#     if isinstance(result, list):
+#         result_ = result[0]
+#         boxes = result_.boxes
+#         masks = result_.masks
+#         probs = result_.probs
+#         print("Masks: ", masks)
+#         print("Bbox: ", boxes)
 
         # for box in boxes:
         #     x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
