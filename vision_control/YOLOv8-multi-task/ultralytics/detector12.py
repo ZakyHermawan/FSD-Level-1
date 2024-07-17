@@ -5,14 +5,20 @@ import argparse
 from ultralytics import YOLO
 import sys
 import torch
+import traceback
 
-sys.path.insert(0, "/home/irman/Documents/FSD-Level-1/vision_control/YOLOv8-multi-task/ultralytics")
+sys.path.insert(0, "/home/orin2/Workspace/FSD-Level-1/vision_control/YOLOv8-multi-task/ultralytics")
+
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import Gst, GObject, GLib
+Gst.init(None)
 
 number = 3  # input how many tasks in your work
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description="ZED YOLOv8 Object Detection")
-parser.add_argument('--model', type=str, default='/home/irman/Documents/FSD-Level-1/vision_control/YOLOv8-multi-task/ultralytics/v4s.pt', help='Path to the YOLOv8 model')
+parser.add_argument('--model', type=str, default='/home/orin2/Workspace/FSD-Level-1/vision_control/YOLOv8-multi-task/ultralytics/v4n.pt', help='Path to the YOLOv8 model')
 parser.add_argument('--conf', type=float, default=0.5, help='Confidence threshold for object detection')
 args = parser.parse_args()
 
@@ -98,6 +104,20 @@ class KalmanFilter:
 
 # Dictionary to store Kalman filters for each tracked object
 kalman_filters = {}
+
+pipeline_str = (
+    "appsrc name=source ! "
+    "video/x-raw,format=BGR,width=640,height=480,framerate=30/1 !"
+    "videoconvert !"
+    "video/x-raw,format=I420,width=640,height=480,framerate=30/1 !"
+    "videoconvert !"
+    "shmsink socket-path=/tmp/shmvideo shm-size=2000000 wait-for-connection=false"
+)
+
+pipeline = Gst.parse_launch(pipeline_str)
+src = pipeline.get_by_name("source")
+
+pipeline.set_state(Gst.State.PLAYING)
 
 while True:
     # Grab an image
@@ -226,6 +246,19 @@ while True:
 
             # Display the combined image
             cv2.imshow("ZED + YOLOv8 - Combined Detection and Segmentation", cv2.cvtColor(combined_img, cv2.COLOR_RGB2BGR))
+            combine = cv2.cvtColor(combined_img, cv2.COLOR_RGB2BGR)
+            combine = cv2.resize(combine, (640, 480))
+
+            # trap bus error
+            try:
+                height, width, channels = combine.shape
+                stride = channels * width
+                gstBuffer = Gst.Buffer.new_allocate(None, height * stride, None)
+                gstBuffer.fill(0, combine.tobytes())
+                src.emit("push-buffer", gstBuffer)
+            except Exception as e:
+                print("exception: ",e)
+                traceback.print_exc()
 
         # Break the loop if 'q' is pressed
         if cv2.waitKey(1) & 0xFF == ord('q'):
